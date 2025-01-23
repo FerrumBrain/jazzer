@@ -50,7 +50,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import java.util.stream.Stream;
 import sun.misc.Unsafe;
 
@@ -73,9 +73,9 @@ public final class FuzzTargetRunner {
         exit(1);
       }
       if (!Opt.targetArgs.setIfDefault(
-          unmodifiableList(
-              concat(Stream.of(Opt.autofuzz.get()), Opt.autofuzzIgnore.get().stream())
-                  .collect(toList())))) {
+              unmodifiableList(
+                      concat(Stream.of(Opt.autofuzz.get()), Opt.autofuzzIgnore.get().stream())
+                              .collect(toList())))) {
         Log.error("--target_args and --autofuzz cannot be specified together");
         exit(1);
       }
@@ -90,7 +90,7 @@ public final class FuzzTargetRunner {
   }
 
   private static final String OPENTEST4J_TEST_ABORTED_EXCEPTION =
-      "org.opentest4j.TestAbortedException";
+          "org.opentest4j.TestAbortedException";
 
   private static final Unsafe UNSAFE = UnsafeProvider.getUnsafe();
 
@@ -103,9 +103,9 @@ public final class FuzzTargetRunner {
   // Keep these options used in runOne (and thus the critical path) in static final fields so that
   // they can be constant-folded by the JIT.
   private static final Set<Long> ignoredTokens =
-      Opt.ignore.get().stream()
-          .map(s -> Long.parseUnsignedLong(s, 16))
-          .collect(toCollection(HashSet::new));
+          Opt.ignore.get().stream()
+                  .map(s -> Long.parseUnsignedLong(s, 16))
+                  .collect(toCollection(HashSet::new));
   private static final boolean useMutatorFramework;
   private static final boolean optimizeMergeInner = Opt.mergeInner.get();
   private static final boolean useHooks = Opt.hooks.get();
@@ -113,13 +113,13 @@ public final class FuzzTargetRunner {
   private static final long keepGoing = Opt.keepGoing.get();
   private static final long crossOverFrequency = Opt.mutatorCrossOverFrequency.get();
   private static final FuzzedDataProviderImpl fuzzedDataProvider =
-      FuzzedDataProviderImpl.withNativeData();
+          FuzzedDataProviderImpl.withNativeData();
   private static final MethodHandle fuzzTargetMethod;
   private static final LifecycleMethodsInvoker lifecycleMethodsInvoker;
   private static final boolean useFuzzedDataProvider;
   private static final ArgumentsMutator mutator;
   private static final ReproducerTemplate reproducerTemplate;
-  private static Consumer<Throwable> fatalFindingHandlerForJUnit;
+  private static BiConsumer<byte[], Throwable> fatalFindingHandlerForJUnit;
 
   static {
     FuzzTargetHolder.FuzzTarget fuzzTarget = FuzzTargetHolder.fuzzTarget;
@@ -135,9 +135,9 @@ public final class FuzzTargetRunner {
     }
 
     useMutatorFramework =
-        Opt.mutatorFramework.get()
-            && Opt.autofuzz.get().isEmpty()
-            && !(fuzzTarget.usesPrimitiveByteArray() || fuzzTarget.usesFuzzedDataProvider());
+            Opt.mutatorFramework.get()
+                    && Opt.autofuzz.get().isEmpty()
+                    && !(fuzzTarget.usesPrimitiveByteArray() || fuzzTarget.usesFuzzedDataProvider());
 
     useFuzzedDataProvider = fuzzTarget.usesFuzzedDataProvider();
     if (!useFuzzedDataProvider && IS_ANDROID) {
@@ -290,10 +290,10 @@ public final class FuzzTargetRunner {
       return LIBFUZZER_CONTINUE;
     }
     boolean continueFuzzing =
-        emitDedupToken
-            && (keepGoing == 0 || Long.compareUnsigned(ignoredTokens.size(), keepGoing) < 0);
+            emitDedupToken
+                    && (keepGoing == 0 || Long.compareUnsigned(ignoredTokens.size(), keepGoing) < 0);
     boolean isFuzzingFromCommandLine =
-        fatalFindingHandlerForJUnit == null || Opt.isJUnitAndCommandLine.get();
+            fatalFindingHandlerForJUnit == null || Opt.isJUnitAndCommandLine.get();
     // In case of --keep_going, only the last finding is reported to JUnit as a Java object, all
     // previous ones are merely printed. When fuzzing from the command line, we always print all
     // findings.
@@ -301,7 +301,7 @@ public final class FuzzTargetRunner {
       Log.finding(finding);
     }
     if (fatalFindingHandlerForJUnit != null && !continueFuzzing) {
-      fatalFindingHandlerForJUnit.accept(finding);
+      fatalFindingHandlerForJUnit.accept(data, finding);
     }
     if (emitDedupToken) {
       // Has to be printed to stdout as it is parsed by libFuzzer when minimizing a crash. It does
@@ -330,17 +330,17 @@ public final class FuzzTargetRunner {
       if (!Opt.autofuzz.get().isEmpty() && emitDedupToken) {
         Log.println("");
         Log.info(
-            String.format(
-                "To continue fuzzing past this particular finding, rerun with the following"
-                    + " additional argument:%n%n    --ignore=%s%n%nTo ignore all findings of this"
-                    + " kind, rerun with the following additional argument:%n%n   "
-                    + " --autofuzz_ignore=%s",
-                ignoredTokens.stream()
-                    .map(token -> Long.toUnsignedString(token, 16))
-                    .collect(joining(",")),
-                Stream.concat(
-                        Opt.autofuzzIgnore.get().stream(), Stream.of(finding.getClass().getName()))
-                    .collect(joining(","))));
+                String.format(
+                        "To continue fuzzing past this particular finding, rerun with the following"
+                                + " additional argument:%n%n    --ignore=%s%n%nTo ignore all findings of this"
+                                + " kind, rerun with the following additional argument:%n%n   "
+                                + " --autofuzz_ignore=%s",
+                        ignoredTokens.stream()
+                                .map(token -> Long.toUnsignedString(token, 16))
+                                .collect(joining(",")),
+                        Stream.concat(
+                                        Opt.autofuzzIgnore.get().stream(), Stream.of(finding.getClass().getName()))
+                                .collect(joining(","))));
       }
       if (fatalFindingHandlerForJUnit == null) {
         // When running a legacy fuzzerTestOneInput test, exit now with the correct exit code.
@@ -380,7 +380,7 @@ public final class FuzzTargetRunner {
   // Called via JNI, being passed data from LLVMFuzzerCustomCrossOver.
   @SuppressWarnings("unused")
   private static int crossOver(
-      long data1, int size1, long data2, int size2, long out, int maxOutSize, int seed) {
+          long data1, int size1, long data2, int size2, long out, int maxOutSize, int seed) {
     // Custom cross over and custom mutate are the only mutators registered in
     // libFuzzer, hence cross over is picked as often as mutate, which is way
     // too frequently. Without custom mutate, cross over would be picked from
@@ -389,9 +389,9 @@ public final class FuzzTargetRunner {
     // mutate is used in the other cases.
     if (crossOverFrequency != 0 && crossOverCount++ % crossOverFrequency == 0) {
       mutator.crossOver(
-          new ByteArrayInputStream(copyToArray(data1, size1)),
-          new ByteArrayInputStream(copyToArray(data2, size2)),
-          seed);
+              new ByteArrayInputStream(copyToArray(data1, size1)),
+              new ByteArrayInputStream(copyToArray(data2, size2)),
+              seed);
     } else {
       mutate(data1, size1, seed);
     }
@@ -439,10 +439,10 @@ public final class FuzzTargetRunner {
       SignalHandler.initialize();
     }
     return startLibFuzzer(
-        args.stream().map(str -> str.getBytes(StandardCharsets.UTF_8)).toArray(byte[][]::new));
+            args.stream().map(str -> str.getBytes(StandardCharsets.UTF_8)).toArray(byte[][]::new));
   }
 
-  public static void registerFatalFindingHandlerForJUnit(Consumer<Throwable> findingHandler) {
+  public static void registerFatalFindingHandlerForJUnit(BiConsumer<byte[], Throwable> findingHandler) {
     FuzzTargetRunner.fatalFindingHandlerForJUnit = Objects.requireNonNull(findingHandler);
   }
 
@@ -488,7 +488,7 @@ public final class FuzzTargetRunner {
     if (useFuzzedDataProvider) {
       fuzzedDataProvider.reset();
       FuzzedDataProvider recordingFuzzedDataProvider =
-          RecordingFuzzedDataProvider.makeFuzzedDataProviderProxy(fuzzedDataProvider);
+              RecordingFuzzedDataProvider.makeFuzzedDataProviderProxy(fuzzedDataProvider);
       try {
         fuzzTargetMethod.invokeExact(recordingFuzzedDataProvider);
         if (JazzerInternal.lastFinding == null) {
@@ -499,8 +499,8 @@ public final class FuzzTargetRunner {
       }
       try {
         base64Data =
-            RecordingFuzzedDataProvider.serializeFuzzedDataProviderProxy(
-                recordingFuzzedDataProvider);
+                RecordingFuzzedDataProvider.serializeFuzzedDataProviderProxy(
+                        recordingFuzzedDataProvider);
       } catch (IOException e) {
         Log.error("Failed to create reproducer", e);
         // Don't let libFuzzer print a native stack trace.
@@ -549,7 +549,7 @@ public final class FuzzTargetRunner {
    */
   private static int startLibFuzzer(byte[][] args) {
     return FuzzTargetRunnerNatives.startLibFuzzer(
-        args, FuzzTargetRunner.class, useMutatorFramework);
+            args, FuzzTargetRunner.class, useMutatorFramework);
   }
 
   /**
